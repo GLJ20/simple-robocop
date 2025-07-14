@@ -24,6 +24,7 @@ FPS = 60
 
 font = pygame.font.Font(None, 36)
 big_font = pygame.font.Font(None, 72)
+title_font = pygame.font.Font(None, 96)
 
 #player
 orig_img = pygame.image.load("assets/robotside.png")
@@ -53,6 +54,7 @@ enemy_spawn_timer = 0
 enemy_spawn_delay = 120 # spawn enemy every 2 secs at 60 fps
 
 #gmae state
+game_state = "start"
 paused = False
 score = 0
 
@@ -60,7 +62,37 @@ score = 0
 bg_x = 0
 bg_speed = 5
 
-
+def draw_start_screen():
+    # Draw background
+    screen.blit(background, (0, 0))
+    
+    # Create semi-transparent overlay
+    overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+    overlay.set_alpha(180)
+    overlay.fill((0, 0, 0))
+    screen.blit(overlay, (0, 0))
+    
+    # Title
+    title_text = title_font.render("ROBOCOP", True, (0, 150, 255))
+    title_rect = title_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 150))
+    screen.blit(title_text, title_rect)
+    
+    subtitle_text = big_font.render("SHOOTER", True, (255, 255, 255))
+    subtitle_rect = subtitle_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 80))
+    screen.blit(subtitle_text, subtitle_rect)
+    
+    # Instructions
+    start_text = font.render("Press SPACE to Start Game", True, (255, 255, 0))
+    start_rect = start_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 50))
+    screen.blit(start_text, start_rect)
+    
+    controls_text = font.render("Controls: RIGHT ARROW = Move, SPACE = Shoot, P = Pause", True, (200, 200, 200))
+    controls_rect = controls_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 100))
+    screen.blit(controls_text, controls_rect)
+    
+    quit_text = font.render("Press ESC to Quit", True, (200, 200, 200))
+    quit_rect = quit_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 150))
+    screen.blit(quit_text, quit_rect)
 #game logic
 running = True
 while running: 
@@ -68,19 +100,35 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN: 
-            if event.key == pygame.K_SPACE and not paused:
-                new_bullet = {
-                    "x": player_rect.x + player_rect.width,
-                    "y": player_rect.y + player_rect.height // 2 - 40,
-                    #we are creating a rectangle bullet, using pygame>rect which is a rectangle object and the arguments it needs is x,y,width, height
-                    "rect": pygame.Rect(player_rect.x + player_rect.width, player_rect.y + player_rect.height //2 - 40, 25, 5)
-                }
-                bullets.append(new_bullet)
-            elif event.key == pygame.K_p:
-                paused = not paused
-            elif event.key == pygame.K_ESCAPE and paused:
-                running = False
-    if not paused:
+            if game_state == "start":
+                if event.key == pygame.K_SPACE:
+                    game_state = "playing"
+                    # Reset game variables
+                    score = 0
+                    bullets.clear()
+                    enemies.clear()
+                    enemy_spawn_timer = 0
+                    bg_x = 0
+                elif event.key == pygame.K_ESCAPE:
+                    running = False
+            elif game_state == "playing":
+                if event.key == pygame.K_SPACE and not paused:
+                    new_bullet = {
+                        "x": player_rect.x + player_rect.width,
+                        "y": player_rect.y + player_rect.height // 2 - 40,
+                        #we are creating a rectangle bullet, using pygame>rect which is a rectangle object and the arguments it needs is x,y,width, height
+                        "rect": pygame.Rect(player_rect.x + player_rect.width, player_rect.y + player_rect.height //2 - 40, 25, 5)
+                    }
+                    bullets.append(new_bullet)
+                elif event.key == pygame.K_p:
+                    paused = not paused
+                elif event.key == pygame.K_ESCAPE and paused:
+                    game_state = "start"
+                    paused = False
+    
+    if game_state == "start":
+        draw_start_screen()
+    elif game_state == "playing" and not paused:
         #for continous movement of player when user presses the right key
         keys = pygame.key.get_pressed()
         if keys[pygame.K_RIGHT]:
@@ -96,51 +144,71 @@ while running:
         #Enemy spawn
         enemy_spawn_timer += 1
         if enemy_spawn_timer >= enemy_spawn_delay:
-            enemy_y = random.randint(100, SCREEN_HEIGHT - 150)
+            # enemy_y = random.randint(100, SCREEN_HEIGHT - 150)
+            enemy_y = player_rect.y 
             new_enemy = {
                 "x": SCREEN_WIDTH,
                 "y": enemy_y,
-                "rect": pygame.Rect(SCREEN_WIDTH, enemy_y, 60, 60)
+                "rect": pygame.Rect(SCREEN_WIDTH, enemy_y, 50, 250)
             }
             enemies.append(new_enemy)
             enemy_spawn_timer = 0
-    for bullet in bullets[:]:
-        bullet["x"] += bullet_speed
-        bullet["rect"].x = bullet["x"]
-        if bullet["x"] > SCREEN_WIDTH:
-            bullets.remove(bullet)
-
-    for enemy in enemies[:]:
-        enemy["x"] -= enemy_speed
-        enemy["rect"].x = enemy["x"]
-        if enemy["x"] < -60:
-            enemies.remove(enemy)
-    
-    for bullet in bullets[:]:
-        for enemy in enemies[:]:
-            if bullet["rect"].colliderect(enemy["rect"]):
+            
+        # Update bullets
+        for bullet in bullets[:]:
+            bullet["x"] += bullet_speed
+            bullet["rect"].x = bullet["x"]
+            if bullet["x"] > SCREEN_WIDTH:
                 bullets.remove(bullet)
+
+        # Update enemies
+        for enemy in enemies[:]:
+            enemy["x"] -= enemy_speed
+            enemy["rect"].x = enemy["x"]
+            if enemy["x"] < -60:
                 enemies.remove(enemy)
-                score += 10
-                break
-    screen.blit(background, (bg_x, 0))
-    screen.blit(background, (bg_x + background.get_width(), 0))
+        
+        # Check collisions
+        for bullet in bullets[:]:
+            for enemy in enemies[:]:
+                if bullet["rect"].colliderect(enemy["rect"]):
+                    bullets.remove(bullet)
+                    enemies.remove(enemy)
+                    score += 10
+                    break
+                    
+        # Draw game
+        screen.blit(background, (bg_x, 0))
+        screen.blit(background, (bg_x + background.get_width(), 0))
 
-    if bg_x <= -background.get_width():
-        bg_x = 0
-    #draw the character
-    screen.blit(player_image, player_rect)
+        if bg_x <= -background.get_width():
+            bg_x = 0
+        #draw the character
+        screen.blit(player_image, player_rect)
 
-    for bullet in bullets:
-        pygame.draw.rect(screen, (255,0,0), bullet["rect"])
-    
-    for enemy in enemies:
-        pygame.draw.rect(screen, (0, 255,0), enemy["rect"])
-    
-    score_text = font.render(f'Score: {score}', True, (255,255,255))
-    screen.blit(score_text, (10,10))
+        for bullet in bullets:
+            pygame.draw.rect(screen, (255,0,0), bullet["rect"])
+        
+        for enemy in enemies:
+            pygame.draw.rect(screen, (0, 255,0), enemy["rect"])
+        
+        score_text = font.render(f'Score: {score}', True, (255,255,255))
+        screen.blit(score_text, (10,10))
 
-    if paused:
+    elif game_state == "playing" and paused:
+        screen.blit(background, (bg_x, 0))
+        screen.blit(background, (bg_x + background.get_width(), 0))
+        screen.blit(player_image, player_rect)
+
+        for bullet in bullets:
+            pygame.draw.rect(screen, (255,0,0), bullet["rect"])
+        
+        for enemy in enemies:
+            pygame.draw.rect(screen, (0, 255,0), enemy["rect"])      
+
+        score_text = font.render(f'Score: {score}', True, (255,255,255))
+        screen.blit(score_text, (10,10))    
+
         pause_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         pause_surface.set_alpha(128)
         pause_surface.fill((0,0,0))
